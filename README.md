@@ -57,6 +57,11 @@ AI Teacher is an affordable, locally-powered educational platform designed to de
 
 ## Technology Stack
 
+### Development Philosophy
+
+**POC/Development:** Lightweight, easy-to-setup tools on FreeBSD
+**Production:** Distributed, scalable infrastructure
+
 ### Core Components
 
 #### LLM & Inference
@@ -66,32 +71,79 @@ AI Teacher is an affordable, locally-powered educational platform designed to de
 
 #### RAG (Retrieval-Augmented Generation)
 - **[LlamaIndex](https://www.llamaindex.ai/)** - RAG orchestration framework
-- **[DuckDB](https://duckdb.org/)** - Embedded vector database with [pgvector extension](https://github.com/duckdb/duckdb_vss)
-- **[Neo4j](https://neo4j.com/)** - Knowledge graph for concept relationships
+
+**Vector Database:**
+- **POC/Dev:** [DuckDB](https://duckdb.org/) with [vss extension](https://github.com/duckdb/duckdb_vss) - Embedded, single-file database
+- **Production:** [Apache Cassandra](https://cassandra.apache.org/) - Distributed, high-throughput vector store
+
+**Knowledge Graph:**
+- **POC/Dev:** [Neo4j](https://neo4j.com/) - Industry-standard graph database with great tooling
+- **Production:** [JanusGraph](https://janusgraph.org/) - Distributed graph database with Cassandra backend
 
 #### Memory & Personalization
 - **[LangChain](https://www.langchain.com/)** - LLM orchestration and chains
 - **[mem0](https://mem0.ai/)** - Conversational memory for adaptive learning
 - **[SQLite](https://sqlite.org/)** - Local conversation history
 
-#### Infrastructure (Future)
-- **FreeBSD** - Operating system
-- **Jails** - Lightweight containerization
+#### Development Environment
+- **[FreeBSD](https://www.freebsd.org/)** - Development and production OS
+- **Python 3.10+** - Primary development language
+
+#### Production Infrastructure
+- **[Apache Cassandra](https://cassandra.apache.org/)** - Distributed vector database
+- **[JanusGraph](https://janusgraph.org/)** - Distributed knowledge graph
+- **[PostgreSQL](https://www.postgresql.org/)** - User management and analytics
+- **[Redis](https://redis.io/)** - Caching and session management
+- **FreeBSD Jails** - Lightweight containerization
 - **Tailscale** - Secure VPN for remote management
 
 ---
 
 ## Quick Start (Proof of Concept)
 
+### Development Environment: FreeBSD
+
+This project is developed on **FreeBSD** for both POC and production. FreeBSD offers:
+- Robust, stable OS for production servers
+- ZFS filesystem for data integrity
+- Jails for lightweight containerization
+- Excellent performance and security
+
 ### Prerequisites
 
+**System Requirements:**
+- FreeBSD 13.x or 14.x
 - Python 3.10+
 - llama.cpp compiled with `llama-server`
 - LFM2 model file (GGUF format)
 - 8GB+ RAM (for 7B Q8 model)
 - 16GB+ disk space (for model + embeddings)
 
-### 1. Setting Up llama-server
+**FreeBSD Package Installation:**
+```bash
+# Update package repository
+pkg update
+
+# Install required packages
+pkg install -y \
+  python310 \
+  py310-pip \
+  py310-sqlite3 \
+  git \
+  gmake \
+  cmake \
+  llvm \
+  pkgconf
+
+# Install databases for POC
+pkg install -y duckdb neo4j
+
+# Set Python 3.10 as default
+ln -s /usr/local/bin/python3.10 /usr/local/bin/python3
+ln -s /usr/local/bin/pip-3.10 /usr/local/bin/pip3
+```
+
+### 1. Setting Up llama-server on FreeBSD
 
 #### Download and Compile llama.cpp
 
@@ -100,13 +152,19 @@ AI Teacher is an affordable, locally-powered educational platform designed to de
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
 
+# FreeBSD uses gmake (GNU Make) instead of make
 # Compile (CPU-only)
-make -j
+gmake -j
 
-# Or compile with GPU support (CUDA)
-make LLAMA_CUDA=1 -j
+# Or compile with GPU support (CUDA - if available)
+gmake LLAMA_CUDA=1 -j
 
-# The binary will be at: ./llama-server
+# Or use CMake for more control
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release -j
+
+# The binary will be at: ./llama-server (or build/bin/llama-server if using CMake)
 ```
 
 #### Download LFM2 Model
@@ -382,17 +440,21 @@ EOF
 
 ---
 
-## Next Steps: RAG + Memory Implementation
+## Next Steps: RAG + Memory Implementation (POC)
 
 ### Upcoming Components (Next Chat)
 
-#### 1. DuckDB with pgvector Extension
+**Note:** These components are for **POC/Development** on FreeBSD. Production will migrate to Cassandra + JanusGraph for scalability.
+
+#### 1. DuckDB with VSS Extension (POC/Development)
 - **Purpose:** Embedded vector database for document embeddings
-- **Advantages over Cassandra:**
-  - Lightweight, embedded (no separate server)
-  - Excellent for single-machine deployments
+- **Why DuckDB for POC:**
+  - Lightweight, embedded (no separate server required)
+  - Single-file database (easy to backup/share)
   - SQL interface familiar to developers
   - Perfect for prototyping and desktop apps
+  - Fast development iteration
+- **Production Migration:** Data will be migrated to Apache Cassandra for distributed, high-throughput operations
 
 **Installation:**
 ```bash
@@ -432,25 +494,34 @@ results = conn.execute("""
 """, [query_embedding]).fetchall()
 ```
 
-#### 2. Neo4j Knowledge Graph
+#### 2. Neo4j Knowledge Graph (POC/Development)
 - **Purpose:** Store concept relationships and prerequisites
-- **Advantages over JanusGraph:**
+- **Why Neo4j for POC:**
   - Industry-standard graph database
   - Excellent Cypher query language
   - Great visualization tools (Neo4j Browser)
   - Strong community and documentation
+  - Easy to set up and use for development
+- **Production Migration:** Will transition to JanusGraph with Cassandra backend for distributed graph operations
 
-**Installation:**
+**Installation on FreeBSD:**
 ```bash
-# Using Docker
+# Option 1: Using FreeBSD package (recommended for POC)
+pkg install neo4j
+
+# Start Neo4j service
+service neo4j enable
+service neo4j start
+
+# Option 2: Using Docker (if available)
 docker run -d \
   --name neo4j \
   -p 7474:7474 -p 7687:7687 \
   -e NEO4J_AUTH=neo4j/password \
   neo4j:latest
 
-# Or use Neo4j Desktop
-# Download from: https://neo4j.com/download/
+# Access Neo4j Browser at: http://localhost:7474
+# Default credentials: neo4j/neo4j (you'll be prompted to change)
 ```
 
 **Usage Preview:**
@@ -490,6 +561,89 @@ with driver.session() as session:
 - **Conversation memory management**
 - **Student profile tracking**
 - **Adaptive difficulty adjustment**
+
+---
+
+## Database Migration Strategy: POC → Production
+
+### Why Use Different Databases?
+
+**POC/Development Goals:**
+- Fast iteration and prototyping
+- Easy setup on single FreeBSD machine
+- Developer-friendly tools and debugging
+- Minimal infrastructure complexity
+
+**Production Requirements:**
+- Horizontal scalability (10K+ users)
+- High availability and fault tolerance
+- Distributed architecture across multiple servers
+- Multi-datacenter replication
+- High throughput (1000+ queries/second)
+
+### Migration Path
+
+#### Phase 1: POC (Months 1-5)
+```
+DuckDB (vector store)    →   Single file database
+Neo4j (knowledge graph)  →   Single instance, FreeBSD package
+```
+
+#### Phase 2: Beta/MVP (Months 6-8)
+```
+DuckDB                   →   Still using for <1000 users
+Neo4j                    →   Add replication for redundancy
+```
+
+#### Phase 3: Production Migration (Months 9-11)
+```
+DuckDB                   →   Migrate to Cassandra cluster (3+ nodes)
+Neo4j                    →   Migrate to JanusGraph with Cassandra backend
+```
+
+### Data Migration Tools
+
+We will develop migration scripts to:
+1. **Export embeddings from DuckDB** → SQL dump or parquet files
+2. **Import to Cassandra** → Batch insert using Python driver
+3. **Export Neo4j graph** → Cypher scripts or JSON
+4. **Import to JanusGraph** → Gremlin scripts via Python
+
+### Abstraction Layer
+
+To ease migration, we'll use an abstraction layer:
+
+```python
+# Abstract interface for vector store
+class VectorStore(ABC):
+    @abstractmethod
+    def search(self, query_embedding: List[float], k: int) -> List[Document]:
+        pass
+
+    @abstractmethod
+    def insert(self, document: Document, embedding: List[float]):
+        pass
+
+# POC implementation
+class DuckDBVectorStore(VectorStore):
+    # Implementation using DuckDB + vss
+    pass
+
+# Production implementation
+class CassandraVectorStore(VectorStore):
+    # Implementation using Cassandra
+    pass
+
+# Easy swap: Just change one line
+vector_store = DuckDBVectorStore()  # POC
+# vector_store = CassandraVectorStore()  # Production
+```
+
+**Benefits:**
+- Code remains the same
+- Easy A/B testing
+- Gradual migration (can run both in parallel)
+- Rollback capability if issues arise
 
 ---
 
