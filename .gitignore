@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+*.env
+
+# API Keys and secrets
+api_keys.txt
+*.key
+*.pem
+*.crt
+secrets/
+
+# Data directories (large files)
+data/models/*.gguf
+data/models/*.bin
+data/textbooks/*.pdf
+data/databases/*.duckdb
+data/databases/*.duckdb.wal
+data/embeddings/*.npy
+data/embeddings/*.pkl
+
+# Neo4j data
+data/databases/neo4j/
+
+# Temporary files
+*.log
+*.tmp
+*.cache
+temp/
+tmp/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation builds
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# OS
+Thumbs.db
+.DS_Store
+*.bak
+
+# Keep directory structure with .gitkeep
+!data/.gitkeep
+!data/models/.gitkeep
+!data/textbooks/.gitkeep
+!data/databases/.gitkeep
+!data/embeddings/.gitkeep
