@@ -108,19 +108,60 @@ phase1_poc/
 │   └── TYPEAGENT_IMPLEMENTATION.md  # Detailed TypeAgent explanation
 │
 ├── scripts/
-│   ├── typeagent.py           # TypeAgent entity extraction module (Grok API)
+│   ├── typeagent.py           # TypeAgent entity extraction + OCR (Grok Vision)
 │   ├── 1_init_schema.py       # Initialize CozoDB schema (with entity tables)
 │   ├── 2_import_textbooks.py  # Import PDFs + entity extraction
+│   ├── 2b_import_markdown.py  # Import markdown + entity extraction (NEW!)
 │   ├── 3_test_qa.py           # TypeAgent hybrid search Q&A
-│   └── 3_test_qa_vector_only.py  # Vector-only fallback (for comparison)
+│   ├── 3_test_qa_vector_only.py  # Vector-only fallback (for comparison)
+│   └── 4_analyze_student_answer.py  # OCR student answers + analysis (NEW!)
 │
 ├── data/
 │   ├── textbooks/             # Place PDF files here
+│   ├── textbooks_md/          # Place markdown files here (cleaner import)
+│   ├── student_answers/       # Place student answer images here
 │   └── ai_teacher.db          # CozoDB database (created by scripts)
 │
 └── models/
     └── lfm2-7b-q8_0.gguf      # LFM2 model (download separately)
 ```
+
+## New Features (Latest Update)
+
+### 1. Markdown Import (Cleaner than PDF)
+Import textbooks from markdown files instead of PDFs for cleaner text extraction:
+```bash
+python scripts/2b_import_markdown.py
+```
+
+**Advantages**:
+- No PDF parsing issues
+- Preserves formatting
+- Easier to edit and curate
+- Faster processing
+
+**Converting PDFs to Markdown**:
+- `pandoc input.pdf -o output.md`
+- [Marker](https://github.com/VikParuchuri/marker) (AI-powered)
+- Adobe Acrobat: Export to Markdown
+
+### 2. Student Answer OCR + Analysis
+Analyze handwritten student answers using Grok Vision OCR:
+```bash
+python scripts/4_analyze_student_answer.py student_answer.jpg fisika
+```
+
+**Features**:
+- OCR handwritten or printed answers
+- Extract entities from student's answer
+- Compare with curriculum entities
+- Provide feedback and recommendations
+- Assess concept coverage
+
+**Use Cases**:
+- **Assessment**: Check if student mentioned key concepts
+- **Query expansion**: Use student terminology for search
+- **Feedback**: Identify what student understood vs missed
 
 ## Prerequisites
 

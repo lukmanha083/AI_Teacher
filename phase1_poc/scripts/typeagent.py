@@ -1,24 +1,33 @@
 #!/usr/bin/env python3
 """
-TypeAgent Entity Extraction Module
-===================================
+TypeAgent Entity Extraction Module with OCR
+============================================
 
 This module implements TypeAgent-style structured RAG using Grok API
-for entity extraction from text chunks and user queries.
+for entity extraction from text chunks, user queries, and images (OCR).
 
 Based on Microsoft Research's TypeAgent approach:
 - Extract structured entities (concepts, formulas, topics)
 - Build inverted index for fast entity lookup
 - 4.2x better recall than traditional vector-only RAG
+- OCR for handwritten student answers using Grok Vision
+
+Features:
+- Text entity extraction (from textbooks, queries)
+- Image OCR (handwritten answers, diagrams)
+- Entity extraction from OCR'd text
 
 References:
 - TypeAgent paper: https://www.microsoft.com/en-us/research/publication/typeagent/
 - Grok API: https://docs.x.ai/api
+- Grok Vision: https://docs.x.ai/docs/guides/vision
 """
 
 import os
 import json
-from typing import List, Dict, Optional
+import base64
+from pathlib import Path
+from typing import List, Dict, Optional, Union
 from pydantic import BaseModel, Field
 import requests
 
@@ -238,6 +247,199 @@ Return ONLY valid JSON, no other text."""
         except Exception as e:
             print(f"⚠ Query entity extraction error: {e}")
             return []
+
+    def ocr_image(self, image_path: str) -> str:
+        """
+        Perform OCR on an image using Grok Vision API.
+
+        Supports handwritten text, printed text, diagrams, and formulas.
+
+        Args:
+            image_path: Path to image file (JPG, PNG, etc.)
+
+        Returns:
+            Extracted text from image
+        """
+
+        # Read and encode image
+        try:
+            with open(image_path, 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode('utf-8')
+        except Exception as e:
+            print(f"⚠ Error reading image: {e}")
+            return ""
+
+        # Determine image format
+        image_format = Path(image_path).suffix.lower().replace('.', '')
+        if image_format == 'jpg':
+            image_format = 'jpeg'
+
+        # Grok Vision API call
+        system_prompt = """You are an expert OCR system specialized in reading handwritten student answers for STEM subjects (Math, Physics, Chemistry, Biology) in Indonesian language.
+
+Your task:
+1. Extract ALL text from the image, including:
+   - Handwritten text (even if messy)
+   - Printed text
+   - Mathematical formulas and equations
+   - Diagrams labels
+   - Any annotations
+
+2. Preserve formatting:
+   - Keep paragraph breaks
+   - Preserve formula notation (e.g., F = m × a)
+   - Keep lists and numbering
+
+3. Handle Indonesian language correctly
+
+Return ONLY the extracted text, no additional commentary."""
+
+        user_content = [
+            {
+                "type": "text",
+                "text": "Extract all text from this image. Include handwritten notes, formulas, and any visible text:"
+            },
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{image_format};base64,{image_data}"
+                }
+            }
+        ]
+
+        try:
+            response = requests.post(
+                f"{self.api_url}/chat/completions",
+                headers=self.headers,
+                json={
+                    "model": "grok-vision-beta",  # Grok Vision model
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content}
+                    ],
+                    "temperature": 0.1,  # Very low for accurate OCR
+                    "max_tokens": 2000
+                },
+                timeout=30
+            )
+
+            if response.status_code != 200:
+                print(f"⚠ Grok Vision API error: {response.status_code} - {response.text}")
+                return ""
+
+            result = response.json()
+            extracted_text = result['choices'][0]['message']['content']
+
+            return extracted_text.strip()
+
+        except Exception as e:
+            print(f"⚠ OCR error: {e}")
+            return ""
+
+    def extract_from_image(self, image_path: str, subject: str = "unknown") -> tuple[str, List[Entity]]:
+        """
+        Perform OCR on image and extract entities from the OCR'd text.
+
+        This is useful for analyzing student answers:
+        1. OCR the handwritten answer
+        2. Extract key entities (concepts mentioned)
+        3. Can be used for assessment or query expansion
+
+        Args:
+            image_path: Path to image file
+            subject: Subject context (matematika, fisika, kimia, biologi)
+
+        Returns:
+            Tuple of (ocr_text, entities)
+        """
+
+        print(f"   [OCR] Processing image: {Path(image_path).name}")
+
+        # Step 1: OCR
+        ocr_text = self.ocr_image(image_path)
+
+        if not ocr_text:
+            print(f"   ⚠ No text extracted from image")
+            return ("", [])
+
+        print(f"   ✓ Extracted {len(ocr_text)} characters")
+        print(f"   Preview: {ocr_text[:100]}...")
+
+        # Step 2: Extract entities
+        print(f"   [Entity] Extracting entities from OCR'd text...")
+
+        system_prompt = f"""Extract key entities from this student's answer about {subject}.
+
+Focus on:
+1. **Concepts** mentioned (e.g., "hukum Newton", "fotosintesis")
+2. **Formulas** written (e.g., "F = m × a")
+3. **Topics** discussed (e.g., "gerak lurus")
+4. **Terms** defined
+
+Return JSON:
+{{
+  "entities": [
+    {{"text": "...", "type": "concept|formula|topic|definition", "normalized": "..."}},
+  ]
+}}"""
+
+        user_prompt = f"""Student's answer (from OCR):
+
+---
+{ocr_text[:1000]}
+---
+
+Extract entities. Return ONLY JSON."""
+
+        try:
+            response = requests.post(
+                f"{self.api_url}/chat/completions",
+                headers=self.headers,
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": self.temperature,
+                    "max_tokens": 1000
+                },
+                timeout=30
+            )
+
+            if response.status_code != 200:
+                print(f"   ⚠ Entity extraction error: {response.status_code}")
+                return (ocr_text, [])
+
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+
+            # Parse JSON
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
+            data = json.loads(content)
+
+            entities = [
+                Entity(
+                    text=e['text'],
+                    type=e['type'],
+                    normalized=e['normalized']
+                )
+                for e in data.get('entities', [])
+            ]
+
+            print(f"   ✓ Extracted {len(entities)} entities")
+            for entity in entities:
+                print(f"      - {entity.text} ({entity.type})")
+
+            return (ocr_text, entities)
+
+        except Exception as e:
+            print(f"   ⚠ Entity extraction error: {e}")
+            return (ocr_text, [])
 
 
 def normalize_entity(text: str) -> str:
