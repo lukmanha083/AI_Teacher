@@ -1,10 +1,10 @@
-# Phase 1 POC Requirements
+# Phase 1 POC Requirements (with TypeAgent Structured RAG)
 # Install with: pip install -r requirements.txt
 
 # CozoDB embedded database (SQLite and RocksDB backends)
 pycozo[embedded]==0.7.6
 
-# llama.cpp Python bindings for LFM2
+# llama.cpp Python bindings for LFM2 (answer generation)
 llama-cpp-python==0.2.90
 
 # Sentence transformers for embeddings
@@ -13,7 +13,13 @@ sentence-transformers==3.0.1
 # PDF processing
 pypdf==4.3.1
 
+# HTTP requests for Grok API (entity extraction)
+requests==2.31.0
+
 # Additional utilities
 numpy==1.26.4
 tqdm==4.66.5
 python-dotenv==1.0.1
+
+# JSON handling (for structured entity extraction)
+pydantic==2.5.3

@@ -9,6 +9,8 @@ the AI Teacher POC, including:
 - Embeddings table (vector data)
 - Concepts table (graph nodes)
 - Prerequisites relation (graph edges)
+- Entity tables (TypeAgent structured RAG)
+- Inverted index (chunk_entity for fast entity lookup)
 - HNSW vector index for similarity search
 
 Usage:
@@ -102,7 +104,41 @@ def init_cozodb_schema():
     """)
     print(f"   ✓ Created 'chapter_concept' relation: {result}")
 
-    print("\n6. Creating HNSW index for vector similarity search...")
+    print("\n6. Creating 'entity' relation (TypeAgent structured RAG)...")
+    result = db.run("""
+        :create entity {
+            entity_id: Uuid =>
+            entity_text: String,
+            entity_type: String,
+            subject: String,
+            normalized_form: String,
+            frequency: Int
+        }
+    """)
+    print(f"   ✓ Created 'entity' relation: {result}")
+
+    print("\n7. Creating 'chunk_entity' relation (inverted index for entities)...")
+    result = db.run("""
+        :create chunk_entity {
+            chunk_id: Uuid,
+            entity_id: Uuid =>
+            relevance_score: Float
+        }
+    """)
+    print(f"   ✓ Created 'chunk_entity' relation: {result}")
+
+    print("\n8. Creating 'entity_cooccurrence' relation (entity graph)...")
+    result = db.run("""
+        :create entity_cooccurrence {
+            entity1_id: Uuid,
+            entity2_id: Uuid =>
+            cooccurrence_count: Int,
+            pmi_score: Float
+        }
+    """)
+    print(f"   ✓ Created 'entity_cooccurrence' relation: {result}")
+
+    print("\n9. Creating HNSW index for vector similarity search...")
     result = db.run(f"""
         ::hnsw create embedding_ann_idx {{
             fields: [embedding],
@@ -116,11 +152,12 @@ def init_cozodb_schema():
     """)
     print(f"   ✓ Created HNSW index 'embedding_ann_idx': {result}")
 
-    print("\n7. Verifying schema...")
+    print("\n10. Verifying schema...")
     result = db.run("::relations")
     relations = [row[0] for row in result['rows']]
 
-    expected_relations = ['chapter', 'embedding', 'concept', 'prerequisite', 'chapter_concept']
+    expected_relations = ['chapter', 'embedding', 'concept', 'prerequisite',
+                         'chapter_concept', 'entity', 'chunk_entity', 'entity_cooccurrence']
     for rel in expected_relations:
         if rel in relations:
             print(f"   ✓ Relation '{rel}' exists")
